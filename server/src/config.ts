@@ -66,9 +66,7 @@ const envSchema = z.object({
 
 const parsed = envSchema.safeParse(process.env);
 if (!parsed.success) {
-  console.error('Invalid environment configuration:');
-  for (const i of parsed.error.issues) console.error(`  ${i.path.join('.')}: ${i.message}`);
-  process.exit(1);
+  throw new Error(`Invalid environment configuration:\n${parsed.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`).join('\n')}`);
 }
 const env = parsed.data;
 
@@ -81,14 +79,16 @@ function resolveEncryptionKey(): Buffer {
   if (fromEnv) {
     const buf = Buffer.from(fromEnv, 'base64');
     if (buf.length !== 32) {
-      console.error('APP_ENCRYPTION_KEY must be 32 random bytes, base64-encoded (e.g. `openssl rand -base64 32`).');
-      process.exit(1);
+      // A regular throw (not process.exit): in a serverless function, exit() kills the whole lambda
+      // process before any of our own error handling/logging can run it — a thrown error at least
+      // surfaces through normal module-load error reporting. The long-running server (index.ts) crashes
+      // on this either way, just with a stack trace instead of a plain console.error line.
+      throw new Error('APP_ENCRYPTION_KEY must be 32 random bytes, base64-encoded (e.g. `openssl rand -base64 32`).');
     }
     return buf;
   }
   if (isProd) {
-    console.error('APP_ENCRYPTION_KEY is required in production.');
-    process.exit(1);
+    throw new Error('APP_ENCRYPTION_KEY is required in production.');
   }
   if (isTest) return crypto.createHash('sha256').update('fintrack-test-key').digest();
   const file = path.resolve(process.cwd(), 'data', '.dev-key');
@@ -153,7 +153,6 @@ export type Config = typeof config;
 if (config.isProd) {
   if (!config.appUrl.startsWith('https://')) console.warn('[config] APP_URL is not https — cookies are marked Secure and will not work over plain http.');
   if (!config.databaseUrl && !config.allowEmbeddedDb) {
-    console.error('DATABASE_URL is required in production (set ALLOW_EMBEDDED_DB=true only for single-node demos).');
-    process.exit(1);
+    throw new Error('DATABASE_URL is required in production (set ALLOW_EMBEDDED_DB=true only for single-node demos).');
   }
 }

@@ -8,5 +8,22 @@
 // The actual app is built by `npm run build` (tsup, see tsup.config.ts's "serverless" entry) into
 // server/dist/serverless.js *before* Vercel bundles this file, so this file needs zero path-alias/TS
 // resolution of its own: by the time Vercel traces this import, the target is already plain JS.
-import handler from '../server/dist/serverless.js';
-export default handler;
+//
+// The import is dynamic (inside the handler, not a static top-level `import`) specifically so a throw
+// during that module's own load (server/src/config.ts validates required env vars at import time) can
+// actually be caught here — a static import that throws at load time fails this whole module's own
+// evaluation uncatchably, which is why earlier failures here showed only Vercel's opaque generic 500.
+let modPromise;
+
+export default async function handler(req, res) {
+  try {
+    modPromise ??= import('../server/dist/serverless.js');
+    const mod = await modPromise;
+    return mod.default(req, res);
+  } catch (err) {
+    modPromise = undefined;
+    res.statusCode = 500;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ error: 'module_load_failed', message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined }));
+  }
+}
