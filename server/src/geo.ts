@@ -1,5 +1,22 @@
 import net from 'node:net';
-import geoip from 'geoip-country';
+import { createRequire } from 'node:module';
+
+// A lazy, catchable require (not a static top-level `import`) — geoip-country reads its MaxMind-format
+// .dat file synchronously the moment it's loaded, and some deploy environments' dependency tracing can
+// miss that binary asset (seen on Vercel: ENOENT for the .dat file). A static import would crash the
+// whole app at module-load time in that case; this way, only geo lookups quietly stop working.
+const require = createRequire(import.meta.url);
+let geoip: { lookup(ip: string): { country: string } | null } | null | undefined;
+function loadGeoip() {
+  if (geoip === undefined) {
+    try {
+      geoip = require('geoip-country');
+    } catch {
+      geoip = null;
+    }
+  }
+  return geoip;
+}
 
 /**
  * Best-effort, privacy-conscious location for the security center ("approximate location").
@@ -10,8 +27,10 @@ export function countryForIp(ip: string | undefined | null): string | null {
   if (!ip) return null;
   const clean = ip.replace(/^::ffff:/, '');
   if (isPrivateOrLoopback(clean)) return null;
+  const lib = loadGeoip();
+  if (!lib) return null;
   try {
-    return geoip.lookup(clean)?.country ?? null;
+    return lib.lookup(clean)?.country ?? null;
   } catch {
     return null;
   }
