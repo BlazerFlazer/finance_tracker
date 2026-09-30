@@ -31,10 +31,21 @@ async function boot() {
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  appPromise ??= boot();
-  const app = await appPromise;
-  // Fastify wires its router onto the underlying http.Server's 'request' event at construction time
-  // (independent of .listen()), so replaying that event with the platform's own req/res routes it
-  // through Fastify exactly as a real connection would — the standard way to run Fastify serverless.
-  app.server.emit('request', req, res);
+  try {
+    appPromise ??= boot();
+    const app = await appPromise;
+    // Fastify wires its router onto the underlying http.Server's 'request' event at construction time
+    // (independent of .listen()), so replaying that event with the platform's own req/res routes it
+    // through Fastify exactly as a real connection would — the standard way to run Fastify serverless.
+    app.server.emit('request', req, res);
+  } catch (err) {
+    appPromise = undefined; // let the next invocation retry boot rather than replay a cached rejection
+    logger.error({ err }, 'serverless boot failed');
+    // TEMPORARY: full error detail in the response body while wiring up this deployment — Vercel's log
+    // query API isn't reachable from this session (403, likely plan-tier gated), so this is the only way
+    // to see *why* boot failed. Revert to a generic message once the real cause is fixed — see PROGRESS.md.
+    res.statusCode = 500;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ error: 'boot_failed', message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined }));
+  }
 }
