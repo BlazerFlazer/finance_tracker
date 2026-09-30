@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# build output
+server/dist/
+web/dist/
+*.tsbuildinfo
+
+# local environment / secrets — never commit
+.env
+.env.*
+!.env.example
+
+# local data (embedded dev database, uploaded files, dev outbox)
+data/
+*.log
+
+# tooling
+.vite/
+coverage/
+.claude/settings.local.json
+.DS_Store
+Thumbs.db
