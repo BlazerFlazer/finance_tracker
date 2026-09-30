@@ -71,19 +71,26 @@ export async function buildApp(db: Db): Promise<FastifyInstance> {
   await registerRoutes(app);
 
   // Serve OCR worker/core/language assets straight from node_modules — no copy step, no CDN dependency,
-  // so receipt images never leave the browser except through our own server.
-  await app.register(fastifyStatic, {
-    root: path.dirname(require.resolve('tesseract.js/package.json')) + '/dist',
-    prefix: '/vendor/tesseract-worker/',
-    decorateReply: false,
-    setHeaders: (reply) => reply.header('Cache-Control', 'public, max-age=31536000, immutable'),
-  });
-  await app.register(fastifyStatic, {
-    root: path.dirname(require.resolve('tesseract.js-core/package.json')),
-    prefix: '/vendor/tesseract-core/',
-    decorateReply: false,
-    setHeaders: (reply) => reply.header('Cache-Control', 'public, max-age=31536000, immutable'),
-  });
+  // so receipt images never leave the browser except through our own server. Wrapped: some deploy
+  // environments' dependency tracing can drop these packages (seen on Vercel, for unrelated packages
+  // with the same shape of issue — see geo.ts / reports/pdf.ts), and the receipt scanner is not core
+  // functionality — everything else should keep working even if these routes can't be registered.
+  try {
+    await app.register(fastifyStatic, {
+      root: path.dirname(require.resolve('tesseract.js/package.json')) + '/dist',
+      prefix: '/vendor/tesseract-worker/',
+      decorateReply: false,
+      setHeaders: (reply) => reply.header('Cache-Control', 'public, max-age=31536000, immutable'),
+    });
+    await app.register(fastifyStatic, {
+      root: path.dirname(require.resolve('tesseract.js-core/package.json')),
+      prefix: '/vendor/tesseract-core/',
+      decorateReply: false,
+      setHeaders: (reply) => reply.header('Cache-Control', 'public, max-age=31536000, immutable'),
+    });
+  } catch (err) {
+    logger.warn({ err }, 'tesseract asset routes unavailable — receipt OCR will not work in this deployment');
+  }
   // tesseract.js fetches exactly `${langPath}/${lang}.traineddata.gz` — one shared directory, not
   // per-language subfolders — but each @tesseract.js-data/<lang> package nests its file under a version
   // folder (…/4.0.0/<lang>.traineddata.gz). A tiny route bridges the two without copying files at build time.
@@ -93,7 +100,12 @@ export async function buildApp(db: Db): Promise<FastifyInstance> {
     const match = /^([a-z]+)\.traineddata\.gz$/.exec(file);
     const lang = match?.[1] && TESSERACT_LANGS[match[1]];
     if (!lang) return reply.code(404).send();
-    const filePath = path.join(path.dirname(require.resolve(`@tesseract.js-data/${lang}/package.json`)), '4.0.0', `${lang}.traineddata.gz`);
+    let filePath: string;
+    try {
+      filePath = path.join(path.dirname(require.resolve(`@tesseract.js-data/${lang}/package.json`)), '4.0.0', `${lang}.traineddata.gz`);
+    } catch {
+      return reply.code(404).send();
+    }
     if (!fs.existsSync(filePath)) return reply.code(404).send();
     reply.header('Cache-Control', 'public, max-age=31536000, immutable').header('Content-Type', 'application/gzip');
     return reply.send(fs.createReadStream(filePath));

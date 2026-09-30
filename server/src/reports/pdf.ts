@@ -8,9 +8,19 @@ import type { MonthlyReview } from '../domain/review';
 import { reportText } from './pdfText';
 
 const require = createRequire(import.meta.url);
-const FONT_DIR = path.dirname(require.resolve('dejavu-fonts-ttf/package.json'));
-const REGULAR = path.join(FONT_DIR, 'ttf', 'DejaVuSans.ttf');
-const BOLD = path.join(FONT_DIR, 'ttf', 'DejaVuSans-Bold.ttf');
+// Resolved lazily (on first actual PDF render), not at module-load time: some deploy environments'
+// dependency file-tracing (seen on Vercel, for a couple of other packages with the same shape of issue —
+// see geo.ts) can miss a package's own non-JS assets even though the package itself resolves fine. A
+// top-level require.resolve() would crash the whole app at import time in that case; this way only PDF
+// generation itself would fail, and only if actually invoked.
+let fontPaths: { regular: string; bold: string } | undefined;
+function getFontPaths(): { regular: string; bold: string } {
+  if (!fontPaths) {
+    const fontDir = path.dirname(require.resolve('dejavu-fonts-ttf/package.json'));
+    fontPaths = { regular: path.join(fontDir, 'ttf', 'DejaVuSans.ttf'), bold: path.join(fontDir, 'ttf', 'DejaVuSans-Bold.ttf') };
+  }
+  return fontPaths;
+}
 
 const LOCALE: Record<Lang, string> = { en: 'en-US', ru: 'ru-RU', uz: 'uz-Latn-UZ' };
 
@@ -42,7 +52,8 @@ export function renderMonthlyReportPdf(review: MonthlyReview, lang: Lang): Promi
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    doc.registerFont('body', REGULAR).registerFont('bold', BOLD);
+    const fonts = getFontPaths();
+    doc.registerFont('body', fonts.regular).registerFont('bold', fonts.bold);
     doc.font('bold').fontSize(20).fillColor(BRAND).text('FinTrack', { continued: false });
     doc.font('body').fontSize(10).fillColor(MUTED).text(t.tagline, { align: 'left' });
     doc.moveDown(0.6);
