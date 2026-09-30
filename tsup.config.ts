@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: { index: 'server/src/index.ts', 'cli-db': 'server/src/cli/db.ts', 'cli-create-admin': 'server/src/cli/create-admin.ts' },
+  entry: { index: 'server/src/index.ts', serverless: 'server/src/serverless.ts', 'cli-db': 'server/src/cli/db.ts', 'cli-create-admin': 'server/src/cli/create-admin.ts' },
   outDir: 'server/dist',
   format: ['esm'],
   target: 'node22',

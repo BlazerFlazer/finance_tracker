@@ -159,7 +159,7 @@ async function createPostgres(url: string): Promise<Db> {
   for (const [oid, parser] of Object.entries(PARSERS)) pg.types.setTypeParser(Number(oid), parser as (v: string) => unknown);
   const pool = new pg.Pool({
     connectionString: url,
-    max: 10,
+    max: config.dbPoolMax,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
     ssl: config.databaseSsl ? { rejectUnauthorized: false } : undefined,

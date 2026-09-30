@@ -26,6 +26,10 @@ const envSchema = z.object({
   ALLOWED_ORIGINS: z.string().default(''),
   DATABASE_URL: z.string().optional(),
   DATABASE_SSL: bool(false),
+  // Each serverless instance opens its own pool — keep this small there (e.g. 3) and point DATABASE_URL at
+  // a connection pooler (e.g. Supabase's PgBouncer port), or many concurrent cold starts can exhaust the
+  // database's own connection limit. The long-running server (npm run dev / start) is fine at the default.
+  DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   PGLITE_DIR: z.string().default('./data/pg'),
   ALLOW_EMBEDDED_DB: bool(false),
   APP_ENCRYPTION_KEY: z.string().optional(),
@@ -113,6 +117,7 @@ export const config = {
   allowedOrigins: [appUrl, ...env.ALLOWED_ORIGINS.split(',').map((s) => s.trim().replace(/\/+$/, '')).filter(Boolean)],
   databaseUrl: env.DATABASE_URL,
   databaseSsl: env.DATABASE_SSL,
+  dbPoolMax: env.DB_POOL_MAX,
   pgliteDir: path.resolve(process.cwd(), env.PGLITE_DIR),
   allowEmbeddedDb: env.ALLOW_EMBEDDED_DB,
   encryptionKey,
