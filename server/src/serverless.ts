@@ -41,11 +41,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   } catch (err) {
     appPromise = undefined; // let the next invocation retry boot rather than replay a cached rejection
     logger.error({ err }, 'serverless boot failed');
-    // TEMPORARY: full error detail in the response body while wiring up this deployment — Vercel's log
-    // query API isn't reachable from this session (403, likely plan-tier gated), so this is the only way
-    // to see *why* boot failed. Revert to a generic message once the real cause is fixed — see PROGRESS.md.
     res.statusCode = 500;
     res.setHeader('content-type', 'application/json');
-    res.end(JSON.stringify({ error: 'boot_failed', message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined }));
+    res.end(JSON.stringify({ error: { code: 'INTERNAL_ERROR', message: 'Something went wrong on our end.' } }));
   }
 }

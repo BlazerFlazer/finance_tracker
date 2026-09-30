@@ -22,8 +22,9 @@ export default async function handler(req, res) {
     return mod.default(req, res);
   } catch (err) {
     modPromise = undefined;
+    console.error('serverless module load failed:', err); // captured in Vercel's function logs
     res.statusCode = 500;
     res.setHeader('content-type', 'application/json');
-    res.end(JSON.stringify({ error: 'module_load_failed', message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined }));
+    res.end(JSON.stringify({ error: { code: 'INTERNAL_ERROR', message: 'Something went wrong on our end.' } }));
   }
 }
