@@ -54,7 +54,14 @@ export async function buildApp(db: Db): Promise<FastifyInstance> {
   await app.register(compress, { global: true, threshold: 1024 });
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
 
-  fs.mkdirSync(config.uploadDir, { recursive: true });
+  // Serverless filesystems (Vercel included) are read-only outside /tmp — this call fails there, and
+  // attachment upload/storage genuinely doesn't work without real object storage in that deployment
+  // shape (see docs/QA.md). That's a narrower, more honest failure than taking the whole app down over it.
+  try {
+    fs.mkdirSync(config.uploadDir, { recursive: true });
+  } catch (err) {
+    logger.warn({ err, uploadDir: config.uploadDir }, 'could not create upload directory — file attachments will not work in this deployment');
+  }
 
   app.setErrorHandler(errorHandler);
   app.setNotFoundHandler((req, reply) => {
