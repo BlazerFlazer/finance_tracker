@@ -1,0 +1,12 @@
+// Vercel serverless function entry point for every /api/* request. There is no framework here to give
+// Vercel a dynamic-route convention (that [...param] bracket syntax is a Next.js file-router feature,
+// not a generic Vercel Functions primitive — confirmed the hard way: a bracket-named catch-all file was
+// silently never recognized as a function at all, 404ing on every request, while a plainly-named one
+// worked). So this is one plainly-named function, and vercel.json's rewrite sends every /api/* path to
+// it while preserving the original URL, which is all Fastify's own router needs to take it from here.
+//
+// The actual app is built by `npm run build` (tsup, see tsup.config.ts's "serverless" entry) into
+// server/dist/serverless.js *before* Vercel bundles this file, so this file needs zero path-alias/TS
+// resolution of its own: by the time Vercel traces this import, the target is already plain JS.
+import handler from '../server/dist/serverless.js';
+export default handler;
